@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>DATAtourisme Map</title>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+
+    <style>
+      html,
+      body,
+      #map {
+        height: 100%;
+        margin: 0;
+      }
+
+      .marker-cluster-small {
+        background-color: rgba(181, 226, 140, 0.6);
+      }
+
+      .marker-cluster-small div {
+        background-color: rgba(110, 204, 57, 0.6);
+      }
+
+      .marker-cluster-medium {
+        background-color: rgba(241, 211, 87, 0.6);
+      }
+
+      .marker-cluster-medium div {
+        background-color: rgba(240, 194, 12, 0.6);
+      }
+
+      .marker-cluster-large {
+        background-color: rgba(253, 156, 115, 0.6);
+      }
+
+      .marker-cluster-large div {
+        background-color: rgba(241, 128, 23, 0.6);
+      }
+
+      .marker-cluster {
+        background-clip: padding-box;
+        border-radius: 20px;
+      }
+
+      .marker-cluster div {
+        width: 30px;
+        height: 30px;
+        margin-left: 5px;
+        margin-top: 5px;
+
+        text-align: center;
+        border-radius: 15px;
+        font: 12px "Helvetica Neue", Arial, Helvetica, sans-serif;
+      }
+
+      .marker-cluster span {
+        line-height: 30px;
+      }
+
+      .box {
+        position: absolute;
+        top: 0;
+        z-index: 9999;
+        text-align: center;
+        left: 50%;
+        margin-left: -75px;
+        /* half of the width */
+        background-color: white;
+      }
+
+      .custom-img-icon {
+        width: 100% !important;
+        height: auto;
+        border: 2px solid white;
+        border-radius: 7px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+    <div class="box" id="loading" style="font-size: x-large"></div>
+    <script>
+      const loading = document.getElementById("loading");
+      let isLoading = false;
+      let controller = null;
+
+      function getJSON(url, callback) {
+        controller = new AbortController();
+        const signal = controller.signal;
+
+        fetch(url, { signal })
+          .then((response) => {
+            if (response.ok) {
+              return response.json();
+            } else {
+              throw new Error("Error: " + response.status);
+            }
+          })
+          .then((data) => {
+            callback(data);
+          })
+          .catch((error) => {
+            if (error.name !== "AbortError") {
+              console.error(error);
+            }
+          });
+      }
+
+      const map = L.map("map").setView([46.603354, 1.888334], 6);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution:
+          '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
+
+      const markers = L.geoJson(null, {
+        pointToLayer: createClusterIcon,
+      }).addTo(map);
+
+      function update() {
+        if (isLoading) {
+          return;
+        }
+        isLoading = true;
+
+        const bounds = map.getBounds();
+        loading.innerHTML = `Processing ...`;
+        const before = new Date();
+        getJSON(
+          `/points?west=${bounds.getWest()}&south=${bounds.getSouth()}&east=${bounds.getEast()}&north=${bounds.getNorth()}&zoom=${map.getZoom()}`,
+          (geojson) => {
+            markers.clearLayers();
+            markers.addData(geojson);
+
+            const now = new Date();
+            const diff = now - before;
+            const totalCount = geojson.reduce((acc, feature) => {
+              return (
+                acc +
+                (feature.properties.cluster
+                  ? feature.properties.point_count
+                  : 1)
+              );
+            }, 0);
+            loading.innerHTML = `${totalCount} results (${
+              diff / 1000
+            } seconds)`;
+            isLoading = false;
+          }
+        );
+      }
+
+      map.on("movestart", function () {
+        if (isLoading) {
+          controller.abort();
+          loading.innerHTML = "";
+          isLoading = false;
+        }
+      });
+
+      map.on("moveend", update);
+
+      map.whenReady(update);
+
+      function createClusterIcon(feature, latlng) {
+        if (!feature.properties.cluster) {
+          const markerProps = {};
+          if (feature.properties.image) {
+            markerProps.icon = L.divIcon({
+              className: "custom-div-icon",
+              html: `<img class="custom-img-icon" src="${feature.properties.image}" />`,
+              iconSize: [30, 42],
+              iconAnchor: [21, 8],
+            });
+          }
+          let singleMarker = L.marker(latlng, markerProps).bindPopup(
+            `<a href="${feature.properties.object_id}" target="_blank" rel="noreferrer noopener">${feature.properties.label}</a>`
+          );
+          singleMarker.on("mouseover", function (e) {
+            e.target.openPopup();
+          });
+          singleMarker.on("mouseout", function (e) {
+            e.target.openPopup();
+          });
+          return singleMarker;
+        }
+
+        const count = feature.properties.point_count;
+        const size = count < 100 ? "small" : count < 1000 ? "medium" : "large";
+        const icon = L.divIcon({
+          html: `<div><span>${feature.properties.point_count_abbreviated}</span></div>`,
+          className: `marker-cluster marker-cluster-${size}`,
+          iconSize: L.point(40, 40),
+        });
+
+        return L.marker(latlng, { icon });
+      }
+    </script>
+  </body>
+</html>
