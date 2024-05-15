@@ -9,7 +9,6 @@ services:
       - ${PORT}:${PORT}
     volumes:
       - ./data:/app/data
-      - ./public:/app/public
     depends_on:
       - db
   db:
