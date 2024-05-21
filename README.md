@@ -39,4 +39,3 @@ This project is a map of the points of interest in France. It is based on the [D
 ## Credits
 
 The server-side marker cluster is based on the implementation by [alfiankan](https://github.com/alfiankan) in his [medium post](https://alfiankan.medium.com/handle-millions-of-location-points-with-leaflet-without-breaking-the-browser-f69709a50861).
-handle million point data leaflet server side marker cluster
