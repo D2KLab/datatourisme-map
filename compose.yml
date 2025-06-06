@@ -4,6 +4,7 @@ volumes:
 services:
   web:
     build: .
+    restart: unless-stopped
     env_file: .env
     ports:
       - ${PORT}:${PORT}
@@ -13,6 +14,7 @@ services:
       - db
   db:
     image: postgis/postgis
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_USERNAME}
       POSTGRES_PASSWORD: ${PG_PASSWORD}
